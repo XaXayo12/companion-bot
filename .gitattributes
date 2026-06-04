@@ -1,0 +1,6 @@
+# Normalize line endings: LF in the repo for text, so the Linux CI and the
+# gradlew shell script always work, while Windows batch files stay CRLF.
+* text=auto eol=lf
+*.bat text eol=crlf
+gradlew text eol=lf
+*.jar binary

@@ -1,0 +1,64 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please fill in as much as you can.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: A clear and short description of the bug.
+      placeholder: When I do X, the bot/mod does Y instead of Z.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start the bot with `cargo run`
+        2. Join the server with the modded Minecraft client
+        3. Type `@follow` in chat
+        4. ...
+    validations:
+      required: true
+  - type: input
+    id: mc-version
+    attributes:
+      label: Minecraft version
+      placeholder: "1.21.11"
+    validations:
+      required: true
+  - type: input
+    id: server-type
+    attributes:
+      label: Server type
+      description: Vanilla, Paper, Fabric, Forge, online mode, offline mode, etc.
+      placeholder: "Paper 1.21.11, offline mode"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "Windows 11 / macOS 14 / Ubuntu 24.04"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Bot console output and/or .minecraft/logs/latest.log relevant portion. Use code blocks.
+      render: shell
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I checked `DEVELOPMENT.md` and searched existing issues for this problem.
+          required: true
+        - label: I am not running this on a server that explicitly forbids alts / AFK bots.
+          required: false

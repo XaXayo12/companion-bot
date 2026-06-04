@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "afkcompanion",
+  "version": "${version}",
+  "name": "AFK Companion",
+  "description": "In-game control panel (ClickGUI) and safety HUD that drives the AFK Companion bot for Minecraft 1.21.11.",
+  "authors": ["You"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.afkcompanion.AfkCompanionClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.1",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

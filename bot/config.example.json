@@ -1,0 +1,10 @@
+{
+  "server": "play.example.com",
+  "data_dir": ".afk",
+  "owner": "",
+  "bridge_port": 8765,
+  "reconnect_seconds": 8,
+  "accounts": [
+    { "username": "your-microsoft-email@example.com", "auth": "microsoft" }
+  ]
+}

@@ -1,0 +1,41 @@
+[package]
+name = "afk-companion-bot"
+version = "0.1.1"
+edition = "2024"
+description = "Headless Minecraft companion bot (1.21.11) built on Azalea. Controlled from in-game chat (@commands) and the AFK Companion Fabric mod over a local WebSocket."
+license = "MIT"
+
+# Azalea 0.15.1 speaks the Minecraft 1.21.11 protocol (azalea-0.15.1+mc1.21.11).
+# It requires the nightly Rust toolchain (see rust-toolchain.toml).
+#
+# We drop the default `packet-event` feature: it fires an event for every packet
+# and floods the swarm event channel (which we never read at the packet level),
+# wasting CPU. We keep `online-mode` (Microsoft auth), `log`, and `serde`.
+[dependencies]
+azalea = { version = "=0.15.1", default-features = false, features = ["log", "online-mode", "serde"] }
+
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+parking_lot = "0.12"
+anyhow = "1"
+tracing = "0.1"
+
+# Windows-only: switch the console to UTF-8 and enable ANSI color processing so
+# the startup banner and colored prompts render the same as on macOS/Linux.
+# This version is already in Azalea's dependency tree, so it adds no extra build.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Console"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+
+[profile.dev]
+opt-level = 1
+[profile.dev.package."*"]
+opt-level = 3

@@ -1,0 +1,311 @@
+use azalea::inventory::ItemStack;
+use azalea::prelude::*;
+use azalea::registry::builtin::{EntityKind, ItemKind as Item};
+
+pub fn is_food(item: Item) -> bool {
+    matches!(
+        item,
+        Item::Apple
+            | Item::Bread
+            | Item::Carrot
+            | Item::BakedPotato
+            | Item::BeetrootSoup
+            | Item::MushroomStew
+            | Item::RabbitStew
+            | Item::CookedBeef
+            | Item::CookedPorkchop
+            | Item::CookedChicken
+            | Item::CookedMutton
+            | Item::CookedRabbit
+            | Item::CookedCod
+            | Item::CookedSalmon
+            | Item::MelonSlice
+            | Item::SweetBerries
+            | Item::GlowBerries
+            | Item::Cookie
+            | Item::PumpkinPie
+            | Item::DriedKelp
+            | Item::GoldenCarrot
+            | Item::GoldenApple
+            | Item::EnchantedGoldenApple
+    )
+}
+
+pub fn sword_rank(item: Item) -> Option<u8> {
+    Some(match item {
+        Item::WoodenSword => 1,
+        Item::GoldenSword => 2,
+        Item::StoneSword => 3,
+        Item::IronSword => 4,
+        Item::DiamondSword => 5,
+        Item::NetheriteSword => 6,
+        _ => return None,
+    })
+}
+
+pub fn pickaxe_rank(item: Item) -> Option<u8> {
+    Some(match item {
+        Item::WoodenPickaxe => 1,
+        Item::GoldenPickaxe => 2,
+        Item::StonePickaxe => 3,
+        Item::IronPickaxe => 4,
+        Item::DiamondPickaxe => 5,
+        Item::NetheritePickaxe => 6,
+        _ => return None,
+    })
+}
+
+pub fn is_totem(item: Item) -> bool {
+    matches!(item, Item::TotemOfUndying)
+}
+
+/// Which armor equipment slot an item belongs to, if any.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArmorSlot {
+    Helmet,
+    Chestplate,
+    Leggings,
+    Boots,
+}
+
+/// Returns the armor slot and a quality rank (higher = better) for an item.
+pub fn armor_info(item: Item) -> Option<(ArmorSlot, u8)> {
+    use ArmorSlot::*;
+    let (slot, material) = match item {
+        Item::LeatherHelmet => (Helmet, 1),
+        Item::LeatherChestplate => (Chestplate, 1),
+        Item::LeatherLeggings => (Leggings, 1),
+        Item::LeatherBoots => (Boots, 1),
+        Item::GoldenHelmet => (Helmet, 2),
+        Item::GoldenChestplate => (Chestplate, 2),
+        Item::GoldenLeggings => (Leggings, 2),
+        Item::GoldenBoots => (Boots, 2),
+        Item::ChainmailHelmet => (Helmet, 3),
+        Item::ChainmailChestplate => (Chestplate, 3),
+        Item::ChainmailLeggings => (Leggings, 3),
+        Item::ChainmailBoots => (Boots, 3),
+        Item::IronHelmet => (Helmet, 4),
+        Item::IronChestplate => (Chestplate, 4),
+        Item::IronLeggings => (Leggings, 4),
+        Item::IronBoots => (Boots, 4),
+        Item::DiamondHelmet => (Helmet, 5),
+        Item::DiamondChestplate => (Chestplate, 5),
+        Item::DiamondLeggings => (Leggings, 5),
+        Item::DiamondBoots => (Boots, 5),
+        Item::NetheriteHelmet => (Helmet, 6),
+        Item::NetheriteChestplate => (Chestplate, 6),
+        Item::NetheriteLeggings => (Leggings, 6),
+        Item::NetheriteBoots => (Boots, 6),
+        Item::TurtleHelmet => (Helmet, 4),
+        _ => return None,
+    };
+    Some((slot, material))
+}
+
+/// A "keep" item is something the bot should never drop or deposit:
+/// food, weapons, tools, armor, totems, and placeable blocks.
+pub fn is_keep(item: Item) -> bool {
+    is_food(item)
+        || sword_rank(item).is_some()
+        || pickaxe_rank(item).is_some()
+        || armor_info(item).is_some()
+        || is_totem(item)
+        || is_block(item)
+}
+
+/// The inverse of [`is_keep`]: trash that can be dropped/deposited.
+pub fn is_trash(item: Item) -> bool {
+    !is_keep(item)
+}
+
+/// Heuristic block detection: any item whose registry name ends in a common
+/// block suffix, plus a handful of bare-name blocks. We can't enumerate every
+/// block variant, so we match on the registry identifier string.
+pub fn is_block(item: Item) -> bool {
+    let name = item_name(item);
+    name.ends_with("_block")
+        || name.ends_with("_planks")
+        || name.ends_with("_log")
+        || name.ends_with("_stairs")
+        || name.ends_with("_slab")
+        || name.ends_with("_wall")
+        || name.ends_with("_fence")
+        || name.ends_with("_concrete")
+        || name.ends_with("_terracotta")
+        || name.ends_with("_wool")
+        || name.ends_with("_glass")
+        || matches!(
+            name.as_str(),
+            "stone"
+                | "cobblestone"
+                | "dirt"
+                | "grass_block"
+                | "sand"
+                | "gravel"
+                | "netherrack"
+                | "obsidian"
+                | "deepslate"
+                | "bricks"
+                | "glass"
+                | "torch"
+        )
+}
+
+/// The registry identifier (e.g. "diamond_sword") for an item.
+fn item_name(item: Item) -> String {
+    format!("{item:?}")
+        .chars()
+        .enumerate()
+        .flat_map(|(i, c)| {
+            if c.is_uppercase() && i != 0 {
+                vec!['_', c.to_ascii_lowercase()]
+            } else {
+                vec![c.to_ascii_lowercase()]
+            }
+        })
+        .collect()
+}
+
+pub fn is_hostile(kind: EntityKind) -> bool {
+    matches!(
+        kind,
+        EntityKind::Zombie
+            | EntityKind::ZombieVillager
+            | EntityKind::Husk
+            | EntityKind::Drowned
+            | EntityKind::Skeleton
+            | EntityKind::Stray
+            | EntityKind::Bogged
+            | EntityKind::WitherSkeleton
+            | EntityKind::Creeper
+            | EntityKind::Spider
+            | EntityKind::CaveSpider
+            | EntityKind::Slime
+            | EntityKind::MagmaCube
+            | EntityKind::Witch
+            | EntityKind::Pillager
+            | EntityKind::Vindicator
+            | EntityKind::Ravager
+            | EntityKind::Evoker
+            | EntityKind::Vex
+            | EntityKind::Blaze
+            | EntityKind::Phantom
+            | EntityKind::Silverfish
+            | EntityKind::Endermite
+            | EntityKind::Hoglin
+            | EntityKind::Zoglin
+            | EntityKind::PiglinBrute
+            | EntityKind::Guardian
+            | EntityKind::ElderGuardian
+            | EntityKind::Shulker
+            | EntityKind::Breeze
+    )
+}
+
+fn ranked_hotbar_slot(bot: &Client, rank: impl Fn(Item) -> Option<u8>) -> Option<u8> {
+    let menu = bot.menu();
+    let slots = menu.slots();
+    let mut best: Option<(u8, u8)> = None;
+    for hotbar_index in 0u8..9 {
+        let slot_index = 36 + hotbar_index as usize;
+        if let Some(ItemStack::Present(item)) = slots.get(slot_index)
+            && let Some(value) = rank(item.kind)
+                && best.is_none_or(|(best_value, _)| value > best_value) {
+                    best = Some((value, hotbar_index));
+                }
+    }
+    best.map(|(_, hotbar_index)| hotbar_index)
+}
+
+pub fn food_slot(bot: &Client) -> Option<u8> {
+    let menu = bot.menu();
+    let slots = menu.slots();
+    for hotbar_index in 0u8..9 {
+        let slot_index = 36 + hotbar_index as usize;
+        if let Some(ItemStack::Present(item)) = slots.get(slot_index)
+            && is_food(item.kind) {
+                return Some(hotbar_index);
+            }
+    }
+    None
+}
+
+pub fn best_sword_slot(bot: &Client) -> Option<u8> {
+    ranked_hotbar_slot(bot, sword_rank)
+}
+
+pub fn best_pickaxe_slot(bot: &Client) -> Option<u8> {
+    ranked_hotbar_slot(bot, pickaxe_rank)
+}
+
+// --- Player menu absolute slot indices (Player menu layout) ---
+pub const PLAYER_ARMOR_HELMET: usize = 5;
+pub const PLAYER_ARMOR_CHESTPLATE: usize = 6;
+pub const PLAYER_ARMOR_LEGGINGS: usize = 7;
+pub const PLAYER_ARMOR_BOOTS: usize = 8;
+pub const PLAYER_OFFHAND: usize = 45;
+/// Inclusive range of the player's main inventory + hotbar storage slots.
+pub const PLAYER_STORAGE_START: usize = 9;
+pub const PLAYER_STORAGE_END: usize = 44;
+
+pub fn armor_target_slot(slot: ArmorSlot) -> usize {
+    match slot {
+        ArmorSlot::Helmet => PLAYER_ARMOR_HELMET,
+        ArmorSlot::Chestplate => PLAYER_ARMOR_CHESTPLATE,
+        ArmorSlot::Leggings => PLAYER_ARMOR_LEGGINGS,
+        ArmorSlot::Boots => PLAYER_ARMOR_BOOTS,
+    }
+}
+
+/// Find an absolute slot index within the player's storage (9..=44) holding an
+/// item that satisfies `pred`.
+pub fn find_storage_slot(bot: &Client, pred: impl Fn(Item) -> bool) -> Option<usize> {
+    let menu = bot.menu();
+    let slots = menu.slots();
+    for index in PLAYER_STORAGE_START..=PLAYER_STORAGE_END {
+        if let Some(ItemStack::Present(item)) = slots.get(index)
+            && pred(item.kind)
+        {
+            return Some(index);
+        }
+    }
+    None
+}
+
+/// The item kind currently in the bot's offhand, if any.
+pub fn offhand_item(bot: &Client) -> Option<Item> {
+    let menu = bot.menu();
+    let slots = menu.slots();
+    match slots.get(PLAYER_OFFHAND) {
+        Some(ItemStack::Present(item)) => Some(item.kind),
+        _ => None,
+    }
+}
+
+/// The currently-equipped armor item in the given slot, if any.
+pub fn equipped_armor(bot: &Client, slot: ArmorSlot) -> Option<Item> {
+    let menu = bot.menu();
+    let slots = menu.slots();
+    match slots.get(armor_target_slot(slot)) {
+        Some(ItemStack::Present(item)) => Some(item.kind),
+        _ => None,
+    }
+}
+
+/// Find the best (highest-ranked) armor piece for `slot` sitting in storage.
+/// Returns (absolute_slot_index, rank).
+pub fn best_armor_in_storage(bot: &Client, want: ArmorSlot) -> Option<(usize, u8)> {
+    let menu = bot.menu();
+    let slots = menu.slots();
+    let mut best: Option<(usize, u8)> = None;
+    for index in PLAYER_STORAGE_START..=PLAYER_STORAGE_END {
+        if let Some(ItemStack::Present(item)) = slots.get(index)
+            && let Some((slot, rank)) = armor_info(item.kind)
+            && slot == want
+            && best.is_none_or(|(_, br)| rank > br)
+        {
+            best = Some((index, rank));
+        }
+    }
+    best
+}

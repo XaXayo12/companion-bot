@@ -1,0 +1,35 @@
+# --- Rust (bot/) ---
+# Cargo.lock IS committed: this is a binary and the build pins exact versions.
+/bot/target/
+bot/config.json
+# Login token caches (per account) must never be committed.
+.afk/
+bot/.afk/
+
+# --- Java / Gradle (mod/) ---
+# The Gradle wrapper jar IS committed so ./gradlew works out of the box.
+mod/.gradle/
+mod/build/
+mod/run/
+
+# --- IDE ---
+*.iml
+.idea/
+.vscode/
+*.iws
+*.ipr
+.metals/
+.bloop/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Local secrets / scratch ---
+*.log
+*.local
+/.scratch/
+
+# --- Maintainer-only AI working notes (kept local, never published) ---
+CLAUDE.md

@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest a new feature or improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      placeholder: I keep dying because... / It would save me time if...
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      placeholder: Add a `@guard` command that does ...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Which side?
+      options:
+        - Bot (Rust)
+        - Mod (Java/Fabric)
+        - Both
+        - Documentation only
+    validations:
+      required: true
