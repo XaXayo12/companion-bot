@@ -11,7 +11,7 @@ use azalea::{SprintDirection, Vec3, WalkDirection};
 use crate::bot::handler::SwarmState;
 use crate::bot::tasks;
 use crate::bot::world_scan;
-use crate::bot::{dist, identity};
+use crate::bot::{dist, human, identity};
 use crate::shared::{BotCtx, Mode};
 
 /// Distance the protect owner is followed at when no enemy is in range.
@@ -84,17 +84,55 @@ fn move_towards(bot: &Client, ctx: &Arc<BotCtx>, target: Vec3, radius: f32) {
     }
 }
 
+/// Turn the head toward `target` smoothly, by at most a bounded number of
+/// degrees per tick, instead of snapping instantly. This is what stops the
+/// jarring 360-degree flicks and abrupt head turns.
+fn smooth_look_at(bot: &Client, target: Vec3) {
+    let eye = bot.eye_position();
+    let dx = target.x - eye.x;
+    let dy = target.y - eye.y;
+    let dz = target.z - eye.z;
+    let horizontal = (dx * dx + dz * dz).sqrt();
+    if horizontal < 1e-6 {
+        return;
+    }
+    let target_yaw = (-dx).atan2(dz).to_degrees() as f32;
+    let target_pitch = (-dy).atan2(horizontal).to_degrees() as f32;
+
+    let (current_yaw, current_pitch) = bot.direction();
+    const MAX_STEP_DEG: f32 = 32.0;
+
+    // Shortest signed yaw difference, wrapped into [-180, 180].
+    let mut yaw_delta = (target_yaw - current_yaw).rem_euclid(360.0);
+    if yaw_delta > 180.0 {
+        yaw_delta -= 360.0;
+    }
+    let new_yaw = current_yaw + yaw_delta.clamp(-MAX_STEP_DEG, MAX_STEP_DEG);
+    let pitch_delta = (target_pitch - current_pitch).clamp(-MAX_STEP_DEG, MAX_STEP_DEG);
+    let new_pitch = (current_pitch + pitch_delta).clamp(-90.0, 90.0);
+
+    bot.set_direction(new_yaw, new_pitch);
+}
+
 const EAT_DURATION_TICKS: u32 = 36;
 const TELEMETRY_EVERY_TICKS: u32 = 10;
 const ANTI_AFK_EVERY_TICKS: u32 = 200;
 const EQUIP_EVERY_TICKS: u32 = 20;
 /// How often (in ticks, 20/s) the "I can't see you" warning may repeat.
 const CANT_SEE_EVERY_TICKS: u32 = 100;
+/// Vanilla survival attack reach (entity interaction range), in blocks. The bot
+/// never swings at anything farther than this, so its reach stays legit.
+const VANILLA_ATTACK_REACH: f64 = 3.0;
 
 pub fn tick(bot: &Client, ctx: &Arc<BotCtx>) {
     send_telemetry(bot, ctx);
 
-    // 0. Emergency: disconnect if health is critically low (and feature is on).
+    // 0a. Emergency: clutch a dangerous fall with a water bucket (MLG).
+    if auto_mlg(bot, ctx) {
+        return;
+    }
+
+    // 0b. Emergency: disconnect if health is critically low (and feature is on).
     if auto_disconnect(bot, ctx) {
         return;
     }
@@ -155,6 +193,49 @@ fn auto_disconnect(bot: &Client, ctx: &Arc<BotCtx>) -> bool {
     false
 }
 
+// Emergency water-bucket clutch (MLG): when the bot is falling far enough to get
+// hurt and is holding a water bucket, it aims the bucket straight down so the
+// water lands under it, then picks the water back up once it is safely down.
+fn auto_mlg(bot: &Client, ctx: &Arc<BotCtx>) -> bool {
+    let Some(physics) = bot.get_component::<Physics>() else {
+        return false;
+    };
+    let was_clutching = ctx.rt.lock().mlg_placed;
+
+    let falling_danger = !physics.on_ground()
+        && physics.velocity.y < -0.4
+        && physics.fall_distance >= 3.0
+        && !in_water(bot);
+
+    if falling_danger
+        && let Some(slot) = identity::hotbar_slot(bot, identity::is_water_bucket)
+    {
+        if !was_clutching {
+            ctx.log("Clutching with water (MLG).");
+        }
+        // Keep aiming the bucket down; the server places the water source the
+        // moment the ground comes within reach.
+        bot.set_selected_hotbar_slot(slot);
+        let (yaw, _) = bot.direction();
+        bot.set_direction(yaw, 90.0);
+        bot.start_use_item();
+        ctx.rt.lock().mlg_placed = true;
+        return true;
+    }
+
+    if was_clutching && (physics.on_ground() || in_water(bot)) {
+        // Landed safely: scoop the water back up so we keep the bucket.
+        if let Some(slot) = identity::hotbar_slot(bot, identity::is_empty_bucket) {
+            bot.set_selected_hotbar_slot(slot);
+            let (yaw, _) = bot.direction();
+            bot.set_direction(yaw, 90.0);
+            bot.start_use_item();
+        }
+        ctx.rt.lock().mlg_placed = false;
+    }
+    false
+}
+
 // Keep a totem in the offhand and equip the best armor, throttled.
 fn maintain_equipment(bot: &Client, ctx: &Arc<BotCtx>) {
     let (auto_totem, auto_armor) = {
@@ -167,11 +248,24 @@ fn maintain_equipment(bot: &Client, ctx: &Arc<BotCtx>) {
         (rt.auto_totem, rt.auto_armor)
     };
 
-    if auto_totem
-        && identity::offhand_item(bot) != Some(Item::TotemOfUndying)
-        && let Some(slot) = identity::find_storage_slot(bot, identity::is_totem)
-    {
+    // Offhand priority: a Totem of Undying if auto-totem wants one, otherwise a
+    // shield so the bot is never empty-handed in its offhand.
+    let offhand = identity::offhand_item(bot);
+    let totem_slot = if auto_totem && offhand != Some(Item::TotemOfUndying) {
+        identity::find_storage_slot(bot, identity::is_totem)
+    } else {
+        None
+    };
+    if let Some(slot) = totem_slot {
         // Pick up the totem, place it in the offhand, via the player inventory.
+        let inv = bot.get_inventory();
+        inv.left_click(slot);
+        inv.left_click(identity::PLAYER_OFFHAND);
+        inv.left_click(slot);
+    } else if !(auto_totem && offhand == Some(Item::TotemOfUndying))
+        && !offhand.is_some_and(identity::is_shield)
+        && let Some(slot) = identity::find_storage_slot(bot, identity::is_shield)
+    {
         let inv = bot.get_inventory();
         inv.left_click(slot);
         inv.left_click(identity::PLAYER_OFFHAND);
@@ -298,24 +392,31 @@ fn combat(bot: &Client, ctx: &Arc<BotCtx>) -> bool {
         return false;
     };
 
-    if let Some(slot) = identity::best_sword_slot(bot) {
+    // Hold the best melee weapon: a sword, or an axe if it hits harder.
+    if let Some(slot) = identity::best_weapon_slot(bot) {
         bot.set_selected_hotbar_slot(slot);
     }
 
+    // Aim a touch off the exact centre, and turn the head smoothly rather than
+    // snapping, so the bot does not flick around like an aimbot.
     let aim = azalea::Vec3 {
-        x: target_pos.x,
+        x: target_pos.x + human::aim_jitter(),
         y: target_pos.y + 1.3,
-        z: target_pos.z,
+        z: target_pos.z + human::aim_jitter(),
     };
-    bot.look_at(aim);
+    smooth_look_at(bot, aim);
 
-    let in_reach = dist(bot.eye_position(), aim) <= range;
+    // Only ever swing within vanilla survival reach, never farther, even if the
+    // configured killaura range is larger. This keeps the bot's reach legit.
+    let attack_reach = range.min(VANILLA_ATTACK_REACH);
+    let in_reach = dist(bot.eye_position(), aim) <= attack_reach;
     if in_reach {
         // Stand still and trade hits like a player: stop any walk-up path so we
-        // don't slide past the target, and only swing when the cooldown is full
-        // (a full-charge hit, never a useless spam-click).
+        // don't slide past the target, and only swing on a full cooldown (never a
+        // useless spam-click). `human::chance` adds a tick or two of reaction
+        // jitter so swings are not frame-perfect.
         halt(bot, ctx);
-        if !bot.has_attack_cooldown() {
+        if !bot.has_attack_cooldown() && human::chance(0.55) {
             bot.attack(entity);
         }
         return true;
@@ -325,7 +426,7 @@ fn combat(bot: &Client, ctx: &Arc<BotCtx>) -> bool {
     // behaviour), throttled so we don't restart the path every tick, and able to
     // swim if the fight crosses water.
     if !stay_still {
-        move_towards(bot, ctx, target_pos, (range - 0.5).max(1.0) as f32);
+        move_towards(bot, ctx, target_pos, (attack_reach - 0.5).max(1.0) as f32);
         return true;
     }
     false
@@ -500,14 +601,12 @@ fn maybe_start_tasks(bot: &Client, ctx: &Arc<BotCtx>) {
 fn anti_afk(bot: &Client, ctx: &Arc<BotCtx>) {
     let mut rt = ctx.rt.lock();
     rt.anti_afk += 1;
-    if rt.anti_afk >= ANTI_AFK_EVERY_TICKS {
+    // Glance after a slightly random gap, not on an exact clock.
+    if rt.anti_afk >= ANTI_AFK_EVERY_TICKS + human::ticks(0, 40) {
         rt.anti_afk = 0;
         drop(rt);
-        let look = bot.position();
-        bot.look_at(azalea::Vec3 {
-            x: look.x + 1.0,
-            y: look.y + 1.5,
-            z: look.z,
-        });
+        // A small, subtle head turn in a random direction. Never a full spin.
+        let (yaw, pitch) = bot.direction();
+        bot.set_direction(yaw + human::turn_degrees(), pitch);
     }
 }

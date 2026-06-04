@@ -24,6 +24,7 @@ impl Default for SwarmState {
                 server: String::new(),
                 data_dir: ".afk".into(),
                 language: "en".into(),
+                ms_client_id: None,
                 owner: String::new(),
                 bridge_port: 0,
                 reconnect_seconds: 8,

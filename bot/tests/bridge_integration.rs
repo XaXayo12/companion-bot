@@ -22,6 +22,7 @@ fn test_config(port: u16) -> Config {
         server: String::new(),
         data_dir: ".afk".into(),
         language: "en".into(),
+        ms_client_id: None,
         owner: String::new(),
         bridge_port: port,
         reconnect_seconds: 8,

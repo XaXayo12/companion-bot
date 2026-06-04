@@ -1,6 +1,5 @@
 // This module is the only place that queries Azalea's ECS directly.
 
-use azalea::block::BlockTrait;
 use azalea::ecs::prelude::*;
 use azalea::entity::{EntityKindComponent, Position};
 use azalea::player::GameProfileComponent;
@@ -120,13 +119,12 @@ pub fn has_line_of_sight(bot: &Client, from: Vec3, to: Vec3) -> bool {
     true
 }
 
-// A stasis chamber = a thrown ender pearl held in place with soul sand below it.
-// We detect ender-pearl entities that have soul sand within a few blocks under
-// them. Returns (pearl position, optional thrower name).
+// A stasis chamber holds a thrown ender pearl in place (in water, on a trapdoor,
+// in a bubble column, ...). The one reliable signal across all those builds is
+// the ender-pearl *entity* itself, so we simply report every ender pearl we can
+// see. Returns (pearl block position, optional thrower name). The pull task then
+// finds the trapdoor/lever next to it to release you.
 pub fn find_stasis(bot: &Client) -> Vec<(BlockPos, Option<String>)> {
-    let world = bot.world();
-    let instance = world.read();
-
     let mut out = Vec::new();
     for e in scan_world(bot) {
         if !matches!(e.kind, RegistryEntityKind::EnderPearl) {
@@ -137,23 +135,7 @@ pub fn find_stasis(bot: &Client) -> Vec<(BlockPos, Option<String>)> {
             e.pos.y.floor() as i32,
             e.pos.z.floor() as i32,
         );
-        let mut has_soul_sand = false;
-        for dy in 1..=3 {
-            let below = BlockPos::new(base.x, base.y - dy, base.z);
-            if let Some(state) = instance.get_block_state(below) {
-                // Read the block's registry id (e.g. "soul_sand", "soul_soil")
-                // rather than parsing a Debug string, so this stays correct
-                // across block-state changes.
-                let id = Box::<dyn BlockTrait>::from(state).id();
-                if id.contains("soul") {
-                    has_soul_sand = true;
-                    break;
-                }
-            }
-        }
-        if has_soul_sand {
-            out.push((base, e.name));
-        }
+        out.push((base, e.name));
     }
     out
 }

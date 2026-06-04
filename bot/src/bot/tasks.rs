@@ -12,10 +12,13 @@ use azalea::registry::builtin::BlockKind;
 use azalea::{BlockPos, Vec3};
 
 use crate::bot::handler::whisper;
-use crate::bot::{identity, world_scan};
+use crate::bot::{dist, human, identity, world_scan};
 use crate::shared::{BotCtx, Mode};
 
 const REACH: f64 = 4.0;
+/// Vanilla survival block-interaction reach, in blocks. The bot never mines a
+/// block farther than this from its eyes, so its reach stays legit.
+const VANILLA_BLOCK_REACH: f64 = 4.5;
 const CRITICAL_HEALTH: f32 = 6.0;
 
 /// Log to the mod console and whisper the same line back to the player who
@@ -59,12 +62,11 @@ pub async fn mine_area(bot: Client, ctx: Arc<BotCtx>) {
                 wait_until_safe(&bot).await;
 
                 let block = BlockPos::new(x, y, z);
-                if is_air(&bot, block) {
+                let Some(block_id) = block_id_at(&bot, block) else {
                     continue;
-                }
-
-                if let Some(slot) = identity::best_pickaxe_slot(&bot) {
-                    bot.set_selected_hotbar_slot(slot);
+                };
+                if block_id.ends_with("air") {
+                    continue;
                 }
 
                 let center = Vec3 {
@@ -72,9 +74,23 @@ pub async fn mine_area(bot: Client, ctx: Arc<BotCtx>) {
                     y: y as f64 + 0.5,
                     z: z as f64 + 0.5,
                 };
-                bot.goto(RadiusGoal::new(center, REACH as f32)).await;
+                // Walk right up to the block first, then only mine it if it is
+                // within vanilla survival reach. If the bot cannot get close
+                // enough (blocked or unreachable), skip it instead of breaking a
+                // block from across the room.
+                bot.goto(RadiusGoal::new(center, 2.5)).await;
+                if dist(bot.eye_position(), center) > VANILLA_BLOCK_REACH {
+                    continue;
+                }
+
+                // Hold the right tool for this block (pickaxe / axe / shovel).
+                if let Some(slot) = identity::best_tool_slot_for(&bot, &block_id) {
+                    bot.set_selected_hotbar_slot(slot);
+                }
                 bot.look_at(center);
+                human::pause(60, 160).await;
                 bot.mine(block).await;
+                human::pause(40, 120).await;
             }
         }
     }
@@ -87,13 +103,14 @@ pub async fn mine_area(bot: Client, ctx: Arc<BotCtx>) {
     }
 }
 
-fn is_air(bot: &Client, pos: BlockPos) -> bool {
+/// The registry id of the block at `pos` (e.g. "stone", "oak_log"), or `None`
+/// when the chunk is not loaded.
+fn block_id_at(bot: &Client, pos: BlockPos) -> Option<String> {
     let world = bot.world();
     let instance = world.read();
     instance
         .get_block_state(pos)
-        .map(|state| state.is_air())
-        .unwrap_or(true)
+        .map(|state| Box::<dyn BlockTrait>::from(state).id().to_string())
 }
 
 // Detect stasis chambers, then activate one (no arg = just list them).
@@ -241,9 +258,10 @@ pub async fn deposit_items(bot: Client, ctx: Arc<BotCtx>) {
     };
 
     // The open container menu places the chest's own slots first, then the
-    // player's inventory. We shift-click any trash items in the player's
-    // portion to move them into the chest.
-    let mut moved = 0u32;
+    // player's inventory. Collect the trash slots first (so we don't hold the
+    // menu lock across the awaits below), then move them one at a time with
+    // human-like pauses instead of instantly.
+    let mut targets = Vec::new();
     if let Some(menu) = container.menu() {
         let player_range = menu.player_slots_range();
         let slots = menu.slots();
@@ -251,12 +269,21 @@ pub async fn deposit_items(bot: Client, ctx: Arc<BotCtx>) {
             if let Some(ItemStack::Present(item)) = slots.get(index)
                 && identity::is_trash(item.kind)
             {
-                container.shift_click(index);
-                moved += 1;
+                targets.push(index);
             }
         }
     }
 
+    // A short beat after opening, as if reading the chest.
+    human::pause(280, 620).await;
+    let mut moved = 0u32;
+    for index in targets {
+        container.shift_click(index);
+        moved += 1;
+        human::pause(110, 260).await;
+    }
+
+    human::pause(150, 340).await;
     container.close();
     ctx.log(&format!("Deposited {moved} item stack(s)."));
     ctx.rt.lock().deposit_active = false;
@@ -268,18 +295,24 @@ pub async fn drop_trash(bot: Client, ctx: Arc<BotCtx>) {
     ctx.log("Dropping trash items...");
 
     let inv = bot.get_inventory();
-    let mut dropped = 0u32;
+    // Collect trash slots first so we don't hold the menu lock across awaits.
+    let mut targets = Vec::new();
     if let Some(menu) = inv.menu() {
-        let storage_range = identity::PLAYER_STORAGE_START..=identity::PLAYER_STORAGE_END;
         let slots = menu.slots();
-        for index in storage_range {
+        for index in identity::PLAYER_STORAGE_START..=identity::PLAYER_STORAGE_END {
             if let Some(ItemStack::Present(item)) = slots.get(index)
                 && identity::is_trash(item.kind)
             {
-                inv.click(ThrowClick::All { slot: index as u16 });
-                dropped += 1;
+                targets.push(index);
             }
         }
+    }
+
+    let mut dropped = 0u32;
+    for index in targets {
+        inv.click(ThrowClick::All { slot: index as u16 });
+        dropped += 1;
+        human::pause(90, 220).await;
     }
     inv.close();
 

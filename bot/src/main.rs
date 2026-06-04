@@ -48,7 +48,11 @@ async fn main() -> anyhow::Result<()> {
     // in a clean console, before any bridge or swarm log lines appear.
     let mut accounts = Vec::new();
     for account_config in &config.accounts {
-        accounts.push(account_config.to_account(&data_dir).await?);
+        accounts.push(
+            account_config
+                .to_account(&data_dir, config.ms_client_id.as_deref())
+                .await?,
+        );
     }
 
     let shared = Arc::new(Shared::new(config.clone()));

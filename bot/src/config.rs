@@ -19,6 +19,11 @@ pub struct Config {
     /// (`en`, `fr`, `es`, `de`, `ru`, `pt`, `it`). Chosen on first run.
     #[serde(default = "default_language")]
     pub language: String,
+    /// Microsoft OAuth client id used for the device-code sign-in. Defaults to
+    /// the Minecraft launcher's public client id. Override it here only if
+    /// Microsoft rejects the default (e.g. with your own Azure app's id).
+    #[serde(default)]
+    pub ms_client_id: Option<String>,
     /// In-game name of the only player allowed to command the bot by whisper.
     /// Empty (the default) means any player who whispers the bot may command it.
     /// The Fabric mod sets this automatically to your own name, so you normally
@@ -109,10 +114,21 @@ impl AccountConfig {
     /// Build an Azalea account. Microsoft accounts cache (and auto-refresh) their
     /// token in `data_dir/<account>.json` so logins survive restarts and stay
     /// out of the Minecraft folder.
-    pub async fn to_account(&self, data_dir: &Path) -> Result<azalea::Account> {
+    pub async fn to_account(
+        &self,
+        data_dir: &Path,
+        ms_client_id: Option<&str>,
+    ) -> Result<azalea::Account> {
         match self.auth.to_lowercase().as_str() {
             "offline" | "cracked" => Ok(azalea::Account::offline(&self.username)),
-            _ => microsoft_account(&self.username, &cache_file(data_dir, &self.username)).await,
+            _ => {
+                microsoft_account(
+                    &self.username,
+                    &cache_file(data_dir, &self.username),
+                    ms_client_id,
+                )
+                .await
+            }
         }
     }
 }
@@ -130,19 +146,28 @@ fn cache_file(data_dir: &Path, account: &str) -> PathBuf {
 /// label for the token cache (the user signs in with the device-code link, so no
 /// e-mail is ever typed). This mirrors `Account::microsoft` but lets us choose
 /// where the token is cached.
-async fn microsoft_account(cache_key: &str, cache: &Path) -> Result<azalea::Account> {
+async fn microsoft_account(
+    cache_key: &str,
+    cache: &Path,
+    client_id: Option<&str>,
+) -> Result<azalea::Account> {
     println!(
-        "  {}{}Microsoft sign-in{} {}— open the link below and enter the code{}",
+        "  {}{}Microsoft sign-in{} {}open the link below and enter the code{}",
         console::BOLD,
         console::PURPLE,
         console::RESET,
         console::GRAY,
         console::RESET
     );
+    // Default to the Minecraft launcher's public client id, which Microsoft
+    // still accepts for the device-code flow (Azalea's built-in id is rejected
+    // as a "first party application" on some accounts).
+    let client_id = client_id.unwrap_or("00000000402b5328");
     let result = azalea::auth::auth(
         cache_key,
         azalea::auth::AuthOpts {
             cache_file: Some(cache.to_path_buf()),
+            client_id: Some(client_id),
             ..Default::default()
         },
     )
@@ -457,6 +482,7 @@ fn interactive_setup() -> Result<Config> {
         server,
         data_dir: default_data_dir(),
         language: lang.code().to_string(),
+        ms_client_id: None,
         // Left empty on purpose: the mod reports your in-game name automatically
         // (the `set_owner` command), so you never have to type it here.
         owner: String::new(),

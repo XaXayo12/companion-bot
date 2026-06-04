@@ -55,6 +55,34 @@ pub fn pickaxe_rank(item: Item) -> Option<u8> {
     })
 }
 
+pub fn axe_rank(item: Item) -> Option<u8> {
+    Some(match item {
+        Item::WoodenAxe => 1,
+        Item::GoldenAxe => 2,
+        Item::StoneAxe => 3,
+        Item::IronAxe => 4,
+        Item::DiamondAxe => 5,
+        Item::NetheriteAxe => 6,
+        _ => return None,
+    })
+}
+
+pub fn shovel_rank(item: Item) -> Option<u8> {
+    Some(match item {
+        Item::WoodenShovel => 1,
+        Item::GoldenShovel => 2,
+        Item::StoneShovel => 3,
+        Item::IronShovel => 4,
+        Item::DiamondShovel => 5,
+        Item::NetheriteShovel => 6,
+        _ => return None,
+    })
+}
+
+pub fn is_shield(item: Item) -> bool {
+    item_name(item) == "shield"
+}
+
 pub fn is_totem(item: Item) -> bool {
     matches!(item, Item::TotemOfUndying)
 }
@@ -102,18 +130,92 @@ pub fn armor_info(item: Item) -> Option<(ArmorSlot, u8)> {
     Some((slot, material))
 }
 
-/// A "keep" item is something the bot should never drop or deposit:
-/// food, weapons, tools, armor, totems, and placeable blocks.
+/// Any held tool or weapon (sword, axe, pickaxe, shovel, hoe) plus the special
+/// gear a player never throws away (bow, crossbow, trident, mace, shield,
+/// elytra, fishing rod, shears, flint and steel, brush, spyglass).
+pub fn is_tool(item: Item) -> bool {
+    let name = item_name(item);
+    name.ends_with("_sword")
+        || name.ends_with("_axe")
+        || name.ends_with("_pickaxe")
+        || name.ends_with("_shovel")
+        || name.ends_with("_hoe")
+        || matches!(
+            name.as_str(),
+            "bow"
+                | "crossbow"
+                | "trident"
+                | "mace"
+                | "shield"
+                | "elytra"
+                | "fishing_rod"
+                | "shears"
+                | "flint_and_steel"
+                | "brush"
+                | "spyglass"
+                | "bucket"
+                | "water_bucket"
+                | "lava_bucket"
+                | "compass"
+                | "clock"
+                | "name_tag"
+                | "lead"
+        )
+}
+
+/// Materials and rares the bot must never throw away or deposit as "trash":
+/// ingots and gems, netherite, enchanted books and smithing templates, pearls,
+/// shulker boxes, beacons, nether stars, XP bottles, golden/enchanted apples.
+pub fn is_valuable(item: Item) -> bool {
+    let name = item_name(item);
+    name.ends_with("_ingot")
+        || name.ends_with("_shulker_box")
+        || name.ends_with("_smithing_template")
+        || name.ends_with("_upgrade_smithing_template")
+        || matches!(
+            name.as_str(),
+            "diamond"
+                | "emerald"
+                | "lapis_lazuli"
+                | "amethyst_shard"
+                | "netherite_scrap"
+                | "ancient_debris"
+                | "raw_iron"
+                | "raw_gold"
+                | "raw_copper"
+                | "enchanted_book"
+                | "experience_bottle"
+                | "ender_pearl"
+                | "ender_eye"
+                | "nether_star"
+                | "beacon"
+                | "totem_of_undying"
+                | "golden_apple"
+                | "enchanted_golden_apple"
+                | "elytra"
+                | "heart_of_the_sea"
+                | "nautilus_shell"
+                | "echo_shard"
+                | "dragon_egg"
+        )
+}
+
+/// A "keep" item is something the bot must never drop or deposit:
+/// food, every tool/weapon, armor, totems, placeable blocks, and valuables.
+/// Anything not covered here is treated as trash, so we err on the side of
+/// keeping items rather than ever throwing away something useful.
 pub fn is_keep(item: Item) -> bool {
     is_food(item)
-        || sword_rank(item).is_some()
-        || pickaxe_rank(item).is_some()
+        || is_tool(item)
         || armor_info(item).is_some()
         || is_totem(item)
         || is_block(item)
+        || is_valuable(item)
 }
 
-/// The inverse of [`is_keep`]: trash that can be dropped/deposited.
+/// The inverse of [`is_keep`]: trash that can be dropped/deposited. Because
+/// [`is_keep`] is deliberately broad, only genuinely worthless loot (rotten
+/// flesh, string, bones, gunpowder, spider eyes, ...) ever counts as trash.
 pub fn is_trash(item: Item) -> bool {
     !is_keep(item)
 }
@@ -218,16 +320,30 @@ fn ranked_hotbar_slot(bot: &Client, rank: impl Fn(Item) -> Option<u8>) -> Option
 }
 
 pub fn food_slot(bot: &Client) -> Option<u8> {
+    hotbar_slot(bot, is_food)
+}
+
+/// The first hotbar slot (0..9) whose item satisfies `pred`, if any.
+pub fn hotbar_slot(bot: &Client, pred: impl Fn(Item) -> bool) -> Option<u8> {
     let menu = bot.menu();
     let slots = menu.slots();
     for hotbar_index in 0u8..9 {
         let slot_index = 36 + hotbar_index as usize;
         if let Some(ItemStack::Present(item)) = slots.get(slot_index)
-            && is_food(item.kind) {
-                return Some(hotbar_index);
-            }
+            && pred(item.kind)
+        {
+            return Some(hotbar_index);
+        }
     }
     None
+}
+
+pub fn is_water_bucket(item: Item) -> bool {
+    item_name(item) == "water_bucket"
+}
+
+pub fn is_empty_bucket(item: Item) -> bool {
+    item_name(item) == "bucket"
 }
 
 pub fn best_sword_slot(bot: &Client) -> Option<u8> {
@@ -236,6 +352,53 @@ pub fn best_sword_slot(bot: &Client) -> Option<u8> {
 
 pub fn best_pickaxe_slot(bot: &Client) -> Option<u8> {
     ranked_hotbar_slot(bot, pickaxe_rank)
+}
+
+/// Best melee weapon in the hotbar: swords and axes both count. For the same
+/// material a sword wins (faster), but a higher-tier axe beats a lower sword.
+pub fn best_weapon_slot(bot: &Client) -> Option<u8> {
+    ranked_hotbar_slot(bot, |item| {
+        sword_rank(item)
+            .map(|r| r * 2 + 1)
+            .or_else(|| axe_rank(item).map(|r| r * 2))
+    })
+}
+
+/// Best tool in the hotbar for the block whose registry id is `block_id`:
+/// axe for wood-like blocks, shovel for dirt/sand/gravel/snow, otherwise the
+/// best pickaxe (with a pickaxe fallback so the bot always holds something).
+pub fn best_tool_slot_for(bot: &Client, block_id: &str) -> Option<u8> {
+    let wants_axe = block_id.ends_with("_log")
+        || block_id.ends_with("_wood")
+        || block_id.ends_with("_planks")
+        || block_id.ends_with("_stem")
+        || block_id.ends_with("_hyphae")
+        || block_id.contains("chest")
+        || matches!(block_id, "crafting_table" | "bookshelf" | "pumpkin" | "melon");
+    let wants_shovel = matches!(
+        block_id,
+        "dirt"
+            | "grass_block"
+            | "podzol"
+            | "mycelium"
+            | "coarse_dirt"
+            | "rooted_dirt"
+            | "sand"
+            | "red_sand"
+            | "gravel"
+            | "clay"
+            | "soul_sand"
+            | "soul_soil"
+            | "snow"
+            | "snow_block"
+    ) || block_id.ends_with("_snow");
+    if wants_axe {
+        ranked_hotbar_slot(bot, axe_rank).or_else(|| best_pickaxe_slot(bot))
+    } else if wants_shovel {
+        ranked_hotbar_slot(bot, shovel_rank).or_else(|| best_pickaxe_slot(bot))
+    } else {
+        best_pickaxe_slot(bot)
+    }
 }
 
 // --- Player menu absolute slot indices (Player menu layout) ---

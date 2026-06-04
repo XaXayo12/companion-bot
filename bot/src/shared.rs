@@ -102,6 +102,9 @@ pub struct Runtime {
     /// protect command for a player who is not in this world (e.g. you are on a
     /// different server) reports once every few seconds instead of every tick.
     pub cant_see_cooldown: u32,
+    /// True once an emergency water-bucket clutch (MLG) has been placed, so the
+    /// bot knows to pick the water back up after it lands safely.
+    pub mlg_placed: bool,
 }
 
 pub const DEFAULT_FOLLOW_DISTANCE: f64 = 2.0;
@@ -147,6 +150,7 @@ impl Default for Runtime {
             eat_threshold: DEFAULT_EAT_THRESHOLD,
             equip_cooldown: 0,
             cant_see_cooldown: 0,
+            mlg_placed: false,
         }
     }
 }
@@ -437,6 +441,7 @@ mod tests {
             server: String::new(),
             data_dir: ".afk".into(),
             language: "en".into(),
+            ms_client_id: None,
             owner: String::new(),
             bridge_port: 0,
             reconnect_seconds: 8,
