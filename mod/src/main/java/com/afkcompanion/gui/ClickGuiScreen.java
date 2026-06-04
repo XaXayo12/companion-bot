@@ -8,16 +8,22 @@ import com.afkcompanion.module.Category;
 import com.afkcompanion.module.Module;
 import com.afkcompanion.net.BotLink;
 import com.afkcompanion.net.BotState;
+import com.afkcompanion.net.Protocol;
 
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 
 public class ClickGuiScreen extends Screen {
     private static final List<CategoryPanel> PANELS = new ArrayList<>();
     private static final int BAR_Y = 4;
     private static final int CHIP_HEIGHT = 11;
+
+    /** Bottom chat bar: type a line and the selected bot says it in game. */
+    private TextFieldWidget chatInput;
 
     public ClickGuiScreen() {
         super(Text.literal("AFK Companion"));
@@ -27,6 +33,30 @@ public class ClickGuiScreen extends Screen {
                 PANELS.add(new CategoryPanel(category, x, 30));
                 x += CategoryPanel.WIDTH + 8;
             }
+        }
+    }
+
+    @Override
+    protected void init() {
+        // The say bar: a text field plus a Send button, near the bottom. What you
+        // type is sent to the selected bot, which says it in the in-game chat.
+        int barY = this.height - 42;
+        chatInput = new TextFieldWidget(this.textRenderer, 40, barY, 220, 14, Text.literal("say"));
+        chatInput.setMaxLength(256);
+        addDrawableChild(chatInput);
+        addDrawableChild(ButtonWidget.builder(Text.literal("Send"), b -> sendSay())
+                .dimensions(264, barY, 42, 14)
+                .build());
+    }
+
+    private void sendSay() {
+        if (chatInput == null) {
+            return;
+        }
+        String text = chatInput.getText().trim();
+        if (!text.isEmpty()) {
+            AfkCompanionClient.bot.send(Protocol.say(text));
+            chatInput.setText("");
         }
     }
 
@@ -52,6 +82,9 @@ public class ClickGuiScreen extends Screen {
         RenderUtil.text(context,
                 "Click an account above to control it.  In game, whisper /msg <bot> !follow  !come  !stop  !pull.",
                 6, this.height - 24, Theme.TEXT_DIM);
+
+        // Label for the say bar (the field + Send button are drawn as widgets).
+        RenderUtil.text(context, "Say:", 16, this.height - 39, Theme.accent);
     }
 
     // The account selector: one chip for ALL plus one per connected bot. The

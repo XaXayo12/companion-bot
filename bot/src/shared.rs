@@ -105,6 +105,9 @@ pub struct Runtime {
     /// True once an emergency water-bucket clutch (MLG) has been placed, so the
     /// bot knows to pick the water back up after it lands safely.
     pub mlg_placed: bool,
+    /// A message the bot should send to the in-game chat on the next tick,
+    /// queued by the GUI's say bar (the `say` command).
+    pub pending_say: Option<String>,
 }
 
 pub const DEFAULT_FOLLOW_DISTANCE: f64 = 2.0;
@@ -151,6 +154,7 @@ impl Default for Runtime {
             equip_cooldown: 0,
             cant_see_cooldown: 0,
             mlg_placed: false,
+            pending_say: None,
         }
     }
 }
@@ -297,6 +301,12 @@ impl BotCtx {
             "eat_threshold" => {
                 if let Some(food) = value.get("food").and_then(Value::as_u64) {
                     rt.eat_threshold = (food as u32).clamp(MIN_EAT_THRESHOLD, MAX_EAT_THRESHOLD);
+                }
+            }
+            "say" => {
+                // Queue a chat line for the bot to send in game on the next tick.
+                if let Some(text) = str_field(value, "text") {
+                    rt.pending_say = Some(text);
                 }
             }
             _ => {}

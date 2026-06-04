@@ -101,6 +101,8 @@ While in game on the same server:
   or off. If you run several bot accounts, click an account chip at the top to
   choose which one the buttons control, or `ALL`.
 * Press **V** at any time to ask the bot to pull you with a stasis chamber.
+* Use the **say bar** at the bottom of the menu to make the selected bot say a
+  line in the in-game chat.
 
 Commands are given by **private message** only, so other players never see them,
 and only **you** (the player who launched the game with the mod) can command the

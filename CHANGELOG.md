@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Work on the `test` branch, pending in-game validation before a release.
+
+### Added
+- **Say bar.** A chat input at the bottom of the F7 menu: type a line and the
+  selected bot says it in the in-game chat (`say` command).
+- **Water-bucket clutch (MLG).** When the bot falls far enough to get hurt and
+  holds a water bucket, it aims the bucket down to land safely, then scoops the
+  water back up.
+- **Auto-tool.** The bot mines with the right tool for each block (pickaxe, axe,
+  or shovel) and fights with its best weapon (a sword, or an axe if it hits
+  harder). It keeps a shield in its off-hand when no totem is needed there.
+- **Configurable Microsoft client id** (`ms_client_id` in `config.json`),
+  defaulting to the Minecraft launcher's public id so the device-code sign-in
+  works on accounts that reject Azalea's built-in id ("first party application").
+
+### Changed
+- **Legit reach.** The bot only mines blocks within vanilla reach (~4.5 blocks)
+  and only attacks within vanilla reach (3.0 blocks), aiming on its cursor, even
+  if the killaura range is set higher.
+- **Human-like timing.** Attacks, chest opening and item moves, drops, and head
+  movement are randomized, so the bot is not frame-perfect. The head now turns
+  smoothly instead of snapping, ending the 360-degree flicks.
+- **Never lose valuables.** Drop-trash and deposit now keep every tool, weapon,
+  piece of armor, food, block, and rare material (netherite, ingots, gems,
+  enchanted books, elytra, shulker boxes, ...). Only true junk is dropped.
+- **Stasis detection.** It no longer requires soul sand under the pearl (which
+  detected nothing on most builds); it now finds any held ender pearl.
+
 ## [0.1.1] - 2026-06-04
 
 First working public release. Pre-built downloads are attached below, so you do

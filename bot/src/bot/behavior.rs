@@ -127,6 +127,11 @@ const VANILLA_ATTACK_REACH: f64 = 3.0;
 pub fn tick(bot: &Client, ctx: &Arc<BotCtx>) {
     send_telemetry(bot, ctx);
 
+    // Send any chat line the GUI say bar queued.
+    if let Some(line) = ctx.rt.lock().pending_say.take() {
+        bot.chat(line);
+    }
+
     // 0a. Emergency: clutch a dangerous fall with a water bucket (MLG).
     if auto_mlg(bot, ctx) {
         return;

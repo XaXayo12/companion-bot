@@ -116,6 +116,13 @@ public final class Protocol {
         return object.toString();
     }
 
+    /** Make the bot say a line in the in-game chat. */
+    public static String say(String message) {
+        JsonObject object = cmd("say");
+        object.addProperty("text", message == null ? "" : message);
+        return object.toString();
+    }
+
     /** Tell the bot your in-game name so only you can command it by whisper. */
     public static String setOwner(String name) {
         JsonObject object = cmd("set_owner");

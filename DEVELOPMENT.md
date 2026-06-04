@@ -70,6 +70,7 @@ builders themselves never set it. Every event carries the `bot` id it came from.
 | `deposit` |, | Deposit items into the nearest chest |
 | `drop_trash` |, | Drop trash items |
 | `eat_threshold` | `food: u32` | Auto-eat when the live food level is at/below this (clamped 1–19) |
+| `say` | `text: string` | Make the bot say a line in the in-game chat (the GUI say bar) |
 | `set_owner` | `owner: string` | Global (not per-bot): the in-game name allowed to command by whisper. The mod sends your own name automatically; empty means **nobody** may command by whisper. |
 
 ### Bot → Mod (events)
