@@ -12,6 +12,9 @@ Work on the `test` branch, pending in-game validation before a release.
 ### Added
 - **Say bar.** A chat input at the bottom of the F7 menu: type a line and the
   selected bot says it in the in-game chat (`say` command).
+- **Console account menu settings.** From the startup menu you can now change the
+  server (`s`) and the language (`g`) on the fly; the menu re-localizes live and
+  the choice is saved to `config.json`.
 - **Water-bucket clutch (MLG).** When the bot falls far enough to get hurt and
   holds a water bucket, it aims the bucket down to land safely, then scoops the
   water back up.

@@ -248,6 +248,7 @@ struct Strings {
     server: &'static str,
     accounts: &'static str,
     menu: &'static str,
+    more: &'static str,
     start_one: &'static str,
     no_number: &'static str,
     ask_number: &'static str,
@@ -271,6 +272,7 @@ fn strings(lang: Lang) -> Strings {
             server: "Server",
             accounts: "Accounts",
             menu: "Action: [Enter] start all · [number] start one · [a] add · [r] remove · [l] log out · [q] quit:",
+            more: "[s] change server   [g] change language",
             start_one: "Starting only",
             no_number: "No account with that number.",
             ask_number: "Account number:",
@@ -291,6 +293,7 @@ fn strings(lang: Lang) -> Strings {
             server: "Serveur",
             accounts: "Comptes",
             menu: "Action : [Entrée] tout démarrer · [numéro] démarrer un · [a] ajouter · [r] retirer · [l] déconnecter · [q] quitter :",
+            more: "[s] changer de serveur   [g] changer de langue",
             start_one: "Démarrage uniquement de",
             no_number: "Aucun compte avec ce numéro.",
             ask_number: "Numéro du compte :",
@@ -311,6 +314,7 @@ fn strings(lang: Lang) -> Strings {
             server: "Servidor",
             accounts: "Cuentas",
             menu: "Acción: [Enter] iniciar todas · [número] iniciar una · [a] añadir · [r] quitar · [l] cerrar sesión · [q] salir:",
+            more: "[s] cambiar servidor   [g] cambiar idioma",
             start_one: "Iniciando solo",
             no_number: "No hay ninguna cuenta con ese número.",
             ask_number: "Número de cuenta:",
@@ -331,6 +335,7 @@ fn strings(lang: Lang) -> Strings {
             server: "Server",
             accounts: "Konten",
             menu: "Aktion: [Enter] alle starten · [Nummer] eines starten · [a] hinzufügen · [r] entfernen · [l] abmelden · [q] beenden:",
+            more: "[s] Server ändern   [g] Sprache ändern",
             start_one: "Starte nur",
             no_number: "Kein Konto mit dieser Nummer.",
             ask_number: "Kontonummer:",
@@ -351,6 +356,7 @@ fn strings(lang: Lang) -> Strings {
             server: "Сервер",
             accounts: "Аккаунты",
             menu: "Действие: [Enter] запустить все · [номер] запустить один · [a] добавить · [r] удалить · [l] выйти · [q] выход:",
+            more: "[s] сменить сервер   [g] сменить язык",
             start_one: "Запуск только",
             no_number: "Нет аккаунта с таким номером.",
             ask_number: "Номер аккаунта:",
@@ -371,6 +377,7 @@ fn strings(lang: Lang) -> Strings {
             server: "Servidor",
             accounts: "Contas",
             menu: "Ação: [Enter] iniciar todas · [número] iniciar uma · [a] adicionar · [r] remover · [l] sair · [q] encerrar:",
+            more: "[s] mudar servidor   [g] mudar idioma",
             start_one: "Iniciando apenas",
             no_number: "Nenhuma conta com esse número.",
             ask_number: "Número da conta:",
@@ -391,6 +398,7 @@ fn strings(lang: Lang) -> Strings {
             server: "Server",
             accounts: "Account",
             menu: "Azione: [Invio] avvia tutti · [numero] avviane uno · [a] aggiungi · [r] rimuovi · [l] disconnetti · [q] esci:",
+            more: "[s] cambia server   [g] cambia lingua",
             start_one: "Avvio solo di",
             no_number: "Nessun account con quel numero.",
             ask_number: "Numero account:",
@@ -496,15 +504,16 @@ fn interactive_setup() -> Result<Config> {
 /// accounts, start one by number, add an account, remove one, or log one out
 /// (clear its cached token). Localized to the language saved in the config.
 fn manage_accounts(config: &mut Config, path: &str) -> Result<()> {
-    let t = strings(config.lang());
+    let mut t = strings(config.lang());
     loop {
         println!();
         console::section(t.accounts_title);
-        console::info(&format!("{}: {}", t.server, config.server));
+        console::info(&format!("{}: {} · {}", t.server, config.server, config.language));
         console::info(&format!("{}:", t.accounts));
         for (i, a) in config.accounts.iter().enumerate() {
             console::info(&format!("  [{}] {} ({})", i + 1, a.username, a.auth));
         }
+        console::hint(t.more);
         let choice = console::ask(t.menu).to_lowercase();
         // A bare number starts only that account (the others stay in the file).
         if let Ok(n) = choice.parse::<usize>() {
@@ -539,6 +548,23 @@ fn manage_accounts(config: &mut Config, path: &str) -> Result<()> {
                         Err(_) => console::warn(&format!("{} {}", t.no_cache, account.username)),
                     }
                 }
+            }
+            "s" => {
+                let value = console::ask(&format!("{}:", t.server));
+                if !value.trim().is_empty() {
+                    config.server = value;
+                    write_config(config, path)?;
+                    console::ok(t.saved);
+                }
+            }
+            "g" => {
+                let lang = Lang::from_code(&console::ask(
+                    "Language / Langue / Idioma / Sprache / Язык / Idioma / Lingua? [EN]/FR/ES/DE/RU/PT/IT:",
+                ));
+                config.language = lang.code().to_string();
+                t = strings(config.lang());
+                write_config(config, path)?;
+                console::ok(t.saved);
             }
             "q" => std::process::exit(0),
             _ => {}
